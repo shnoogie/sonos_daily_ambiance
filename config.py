@@ -1,7 +1,7 @@
-# how long the event should last
+# how long a random event should last
 duration = 1800 # 30 min
 # how many events occur in a day
-event_range = [3, 5]
+event_range = [6, 8]
 # select volume
 volume = 30
 # soco doesn't always audo discover depending on your network
@@ -16,11 +16,13 @@ devices = {
 schedule = {
 	'morning': {
 		'start': 6,
-		'track': 'Birds'
+		'track': 'Birds',
+		'duration': 10800 # 3 hours
 	},
 	'evening': {
 		'start': 20, # 8pm
-		'track': 'Night'
+		'track': 'Night',
+		'duration': 3600 # 1 hour
 	}
 }
 # this app uses sonos audio library for tracks

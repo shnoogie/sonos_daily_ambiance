@@ -9,8 +9,14 @@ def get_track(device, track_type):
 		# get all the tracks in the album
 		tracks = device.music_library.get_albums('albums', subcategories=[config.audio_data['album']])
 		track_list = []
+		
+		# blacklisting static sounds
+		blacklist = [ config.schedule[item]['track'] for item in config.schedule ]
+
 		for track in tracks:
-			track_list.append(track)
+			if track.title not in blacklist:
+				track_list.append(track)
+
 		# select random track
 		random_track = random.choice(tracks)
 		return random_track
@@ -39,9 +45,15 @@ def get_status(devices):
 	return in_use
 
 def main(track_type):
-	print('Starting...')
+	print('Starting: {}'.format(track_type))
 	# create an instance of all sonos devices
 	devices = get_devices()
+
+	# get track durations
+	if track_type == 'random':
+		duration = config.duration
+	else:
+		duration = config.schedule[track_type]['duration']
 
 	in_use = get_status(devices)
 
@@ -50,13 +62,12 @@ def main(track_type):
 		# add all devices into a single group
 		devices[0].partymode()
 		for device in devices:
-			# set the desired volume on all devices
-			device.ramp_to_volume(config.volume, ramp_type='AUTOPLAY_RAMP_TYPE')
 			if device.is_coordinator:
 				# coordinator is the device that you'll use to control all devices
 				coordinator = device
 	else:
 		# if a device is in use, just exit
+		print('Sonos in use, exiting.')
 		exit()
 
 	# get the queue ready and select track
@@ -72,10 +83,18 @@ def main(track_type):
 		)
 
 	coordinator.add_to_queue(track)
+
+	# set volume
+	device.volume = config.volume
 	coordinator.play_from_queue(index=0)
 	coordinator.seek(random_timestamp)
+
 	# play ambiance for desired time
-	time.sleep(config.duration)
+	time.sleep(duration-60)
+	device.ramp_to_volume(0, ramp_type='SLEEP_TIMER_RAMP_TYPE')
+
+	# let the volume fade out before stopping
+	time.sleep(60)
 	coordinator.stop()
 
 def add_events():
