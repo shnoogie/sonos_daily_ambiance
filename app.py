@@ -11,7 +11,8 @@ def get_track(device, track_type):
         track_list = []
         
         # blacklisting static sounds
-        blacklist = [ config.schedule[item]['track'] for item in config.schedule ]
+        #blacklist = [ config.schedule[item]['track'] for item in config.schedule ]
+        blacklist = [ 'Night' ]
 
         for track in tracks:
             if track.title not in blacklist:
@@ -43,11 +44,15 @@ def get_devices():
 def get_status(devices):
     # check to see if any devices are in use, we don't want to play ambiance if anything is being used
     in_use = False
+    tv_in_use = False
     for device in devices:
         if device.is_coordinator:
             if device.get_current_transport_info()['current_transport_state'] == 'PLAYING':
-                in_use = True
-    return in_use
+                if device.is_playing_tv == False:
+                    in_use = True
+                else:
+                    tv_in_use = True
+    return in_use, tv_in_use
 
 def ajust_volume(devices, volumes):
     if volumes:
@@ -95,16 +100,30 @@ def main(track_type):
     else:
         duration = config.schedule[track_type]['duration']
 
-    in_use = get_status(devices)
+    in_use, tv_in_use = get_status(devices)
+    print('In Use:', in_use)
+    print('TV in Use:', tv_in_use)
 
-    # if no devices are in use, party time!
+    selected_group = False
+
     if not in_use:
+        if tv_in_use:
+            for device in devices:
+                if not device.is_playing_tv:
+                    if device.is_coordinator:
+                        if not selected_group:
+                            selected_group=device.group.coordinator
+                            coordinator = device
+                        else:
+                            device.join(selected_group)
+        else:
         # add all devices into a single group
-        devices[0].partymode()
-        for device in devices:
-            if device.is_coordinator:
-                # coordinator is the device that you'll use to control all devices
-                coordinator = device
+            devices[0].partymode()
+            # get coordinator
+            for device in devices:
+                if device.is_coordinator:
+                    # coordinator is the device that you'll use to control all devices
+                    coordinator = device
     else:
         # if a device is in use, just exit
         print('Sonos in use, exiting.')
@@ -152,6 +171,8 @@ if __name__ == '__main__':
 
     # generate first set of random weather
     get_events()
+
+    main('random')
 
     try:
         scheduler.start()

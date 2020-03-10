@@ -7,22 +7,27 @@ volume = 30
 
 # soco doesn't always audo discover depending on your network
 # I opted to use static ips.
+# if useage is true, play anyways
 devices = {
-    'family_room': {
-        'ip': '192.168.5.203',
-        'volume': 30
+    'tv_room': {
+        'ip': '192.168.5.232',
+        'volume': 15,
+        'if_used': True
         },
     'kitchen': {
-        'ip': '192.168.5.14',
-        'volume': 30
+        'ip': '192.168.5.52',
+        'volume': 25,
+        'if_used': False
         },
     'playroom': {
-        'ip': '192.168.5.51',
-        'volume': 50
+        'ip': '192.168.5.174',
+        'volume': 25,
+        'if_used': False
         },
     'bedroom': {
-        'ip': '192.168.5.33',
-        'volume': 15
+        'ip': '192.168.5.35',
+        'volume': 25,
+        'if_used': False
         }
 }
 # fixed schedule, what time it starts and what track to use.
