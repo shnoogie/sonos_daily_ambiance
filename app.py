@@ -117,13 +117,13 @@ def main(track_type):
                         else:
                             device.join(selected_group)
         else:
-        # add all devices into a single group
-            devices[0].partymode()
-            # get coordinator
             for device in devices:
                 if device.is_coordinator:
-                    # coordinator is the device that you'll use to control all devices
-                    coordinator = device
+                    if not selected_group:
+                        selected_group=device.group.coordinator
+                        coordinator = device
+                    else:
+                        device.join(selected_group)
     else:
         # if a device is in use, just exit
         print('Sonos in use, exiting.')
@@ -171,8 +171,6 @@ if __name__ == '__main__':
 
     # generate first set of random weather
     get_events()
-
-    main('random')
 
     try:
         scheduler.start()
