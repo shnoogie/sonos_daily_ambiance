@@ -99,6 +99,7 @@ def main(track_type):
         duration = config.duration
     else:
         duration = config.schedule[track_type]['duration']
+    print(duration)
 
     in_use, tv_in_use = get_status(devices)
     print('In Use:', in_use)
@@ -150,13 +151,25 @@ def main(track_type):
     coordinator.seek(random_timestamp)
 
     # play ambiance for desired time
-    time.sleep(duration-60)
+    print('sleeping')
+    #time.sleep(duration-60)
+    time.sleep(15)
+    print('stopping')
+
+    devices, volumes = get_devices()
+
+    current_devices = []
+    for device in devices:
+        if device.get_current_track_info()['artist'] == config.audio_data['artist']:
+            current_devices.append(device)
+            if device.is_coordinator:
+                coordinator = device
 
     # Fade out volume
-    ajust_volume(devices, None)
+    ajust_volume(current_devices, None)
 
     # let the volume fade out before stopping
-    time.sleep(60)
+    #time.sleep(60)
     coordinator.stop()
 
 if __name__ == '__main__':
@@ -171,6 +184,8 @@ if __name__ == '__main__':
 
     # generate first set of random weather
     get_events()
+
+    main('random')
 
     try:
         scheduler.start()
