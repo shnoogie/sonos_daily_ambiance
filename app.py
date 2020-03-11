@@ -99,7 +99,6 @@ def main(track_type):
         duration = config.duration
     else:
         duration = config.schedule[track_type]['duration']
-    print(duration)
 
     in_use, tv_in_use = get_status(devices)
     print('In Use:', in_use)
@@ -151,10 +150,7 @@ def main(track_type):
     coordinator.seek(random_timestamp)
 
     # play ambiance for desired time
-    print('sleeping')
-    #time.sleep(duration-60)
-    time.sleep(15)
-    print('stopping')
+    time.sleep(duration-60)
 
     devices, volumes = get_devices()
 
