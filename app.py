@@ -165,7 +165,8 @@ def main(track_type):
     ajust_volume(current_devices, None)
 
     # let the volume fade out before stopping
-    #time.sleep(60)
+    print('Stopping: {}'.format(track_type))
+    time.sleep(60)
     coordinator.stop()
 
 if __name__ == '__main__':
