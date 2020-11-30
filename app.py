@@ -1,17 +1,17 @@
-from soco import SoCo
+import soco 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from datetime import date
 import random, time
 import config
 
 def get_track(device, track_type):
-    if track_type is 'random': 
+    if track_type == 'random': 
         # get all the tracks in the album
         tracks = device.music_library.get_albums('albums', subcategories=[config.audio_data['album']])
         track_list = []
         
         # blacklisting static sounds
-        #blacklist = [ config.schedule[item]['track'] for item in config.schedule ]
+        # blacklist = [ config.schedule[item]['track'] for item in config.schedule ]
         blacklist = [ 'Night' ]
 
         for track in tracks:
@@ -30,41 +30,57 @@ def get_track(device, track_type):
 
 def get_devices():
     # create an empty list for devices to populate into
-    devices = []
-    volumes = {}
-    # create an instance for all devices
-    for device in config.devices:
-        new_instance = SoCo(config.devices[device]['ip'])
-        # adding volumes like this makes it so config does not need updated when 
-        # devices are renamed
-        volumes.update({ new_instance.player_name: config.devices[device]['volume'] })
-        devices.append(new_instance)
-    return devices, volumes
-
-def get_status(devices):
-    # check to see if any devices are in use, we don't want to play ambiance if anything is being used
-    in_use = False
-    tv_in_use = False
-    for device in devices:
-        if device.is_coordinator:
-            if device.get_current_transport_info()['current_transport_state'] == 'PLAYING':
-                if device.is_playing_tv == False:
-                    in_use = True
-                else:
-                    tv_in_use = True
-    return in_use, tv_in_use
-
-def ajust_volume(devices, volumes):
-    if volumes:
+    devices = list(soco.discover())
+    coordinator = None
+    device_list = []
+    #### if you want to select or whitelist rooms ####
+    #temp_device = []
+    #count = 0
+    #for device in devices:
+    #    player_name = device.player_name
+    #    if player_name == 'Office':
+    #        temp_device.append(devices[count])
+    #    count += 1
+    #return temp_device
+    i = 0
+    # run twice to ensure all non-grouped devices are added.
+    while 2 > i:
         for device in devices:
-            volume = volumes[device.player_name]
+            if device.is_coordinator:
+                if device.get_current_transport_info()['current_transport_state'] != 'PLAYING':
+                    if coordinator != device:
+                        if not coordinator:
+                            coordinator = device
+                            device_list.append(device)
+                        else:
+                            device.join(coordinator)
+                            device_list.append(device)
+        i += 1
+
+    return device_list, coordinator
+
+def ajust_volume(devices, volume_type):
+    if volume_type:
+        volume = config.volume
+        for device in devices:
             device.ramp_to_volume(volume, ramp_type='SLEEP_TIMER_RAMP_TYPE')
     else:
         volume = 0
         for device in devices:
             device.ramp_to_volume(volume, ramp_type='SLEEP_TIMER_RAMP_TYPE')
 
-def get_events():
+def generate_schedule():
+    # remove jobs and start again
+    for job in scheduler.get_jobs():
+        job.remove()
+
+    # add the weather scheduler
+    scheduler.add_job(generate_schedule, 'cron', hour=1, minute=0)
+
+    # get the fixed schedules added
+    for event in config.schedule:
+        scheduler.add_job(main, 'cron', [event], hour=config.schedule[event]['start'], minute=0)
+
     # generate weather events
     end_date = '{} 20:00:00'.format(date.today())
     events = []
@@ -92,7 +108,7 @@ def get_events():
 def main(track_type):
     print('Starting: {}'.format(track_type))
     # create an instance of all sonos devices
-    devices, volumes = get_devices()
+    devices, coordinator = get_devices()
 
     # get track durations
     if track_type == 'random':
@@ -100,42 +116,13 @@ def main(track_type):
     else:
         duration = config.schedule[track_type]['duration']
 
-    in_use, tv_in_use = get_status(devices)
-    print('In Use:', in_use)
-    print('TV in Use:', tv_in_use)
-
-    selected_group = False
-
-    if not in_use:
-        if tv_in_use:
-            for device in devices:
-                if not device.is_playing_tv:
-                    if device.is_coordinator:
-                        if not selected_group:
-                            selected_group=device.group.coordinator
-                            coordinator = device
-                        else:
-                            device.join(selected_group)
-        else:
-            for device in devices:
-                if device.is_coordinator:
-                    if not selected_group:
-                        selected_group=device.group.coordinator
-                        coordinator = device
-                    else:
-                        device.join(selected_group)
-    else:
-        # if a device is in use, just exit
-        print('Sonos in use, exiting.')
-        exit()
-
     # get the queue ready, select and add track
     coordinator.clear_queue()
     track = get_track(coordinator, track_type)
     coordinator.add_to_queue(track)
 
     # set volume
-    ajust_volume(devices, volumes)
+    ajust_volume(devices, True)
 
     # files are supposed to be 10 hours log, don't go past 5 hours
     # in case one isn't
@@ -152,7 +139,7 @@ def main(track_type):
     # play ambiance for desired time
     time.sleep(duration-60)
 
-    devices, volumes = get_devices()
+    devices = get_devices()
 
     current_devices = []
     for device in devices:
@@ -172,15 +159,8 @@ def main(track_type):
 if __name__ == '__main__':
     scheduler = BlockingScheduler()
 
-    # get the fixed schedules added
-    for event in config.schedule:
-        scheduler.add_job(main, 'cron', [event], hour=config.schedule[event]['start'], minute=0)
-
-    # add the weather generator
-    scheduler.add_job(get_events, 'cron', hour=1, minute=0)
-
     # generate first set of random weather
-    get_events()
+    generate_schedule()
 
     main('random')
 
