@@ -12,7 +12,7 @@ def get_track(device, track_type):
         
         # blacklisting static sounds
         # blacklist = [ config.schedule[item]['track'] for item in config.schedule ]
-        blacklist = [ 'Night' ]
+        blacklist = config.blacklist
 
         for track in tracks:
             if track.title not in blacklist:
@@ -105,56 +105,67 @@ def generate_schedule():
 
     scheduler.print_jobs()
 
-def main(track_type):
-    print('Starting: {}'.format(track_type))
-    # create an instance of all sonos devices
-    devices, coordinator = get_devices()
-
-    # get track durations
-    if track_type == 'random':
-        duration = config.duration
-    else:
-        duration = config.schedule[track_type]['duration']
-
-    # get the queue ready, select and add track
-    coordinator.clear_queue()
-    track = get_track(coordinator, track_type)
-    coordinator.add_to_queue(track)
-
-    # set volume
-    ajust_volume(devices, True)
-
-    # files are supposed to be 10 hours log, don't go past 5 hours
-    # in case one isn't
-    random_timestamp = '{}:{}:{}'.format(
-            str(random.randrange(0, 5)).zfill(2), 
-            str(random.randrange(0, 59)).zfill(2), 
-            str(random.randrange(0, 59)).zfill(2)
-        )
-
-    # there should only be 1 track on the
-    coordinator.play_from_queue(index=0)
-    coordinator.seek(random_timestamp)
-
-    # play ambiance for desired time
-    time.sleep(duration-60)
-
-    devices = get_devices()
-
-    current_devices = []
+def app_exit():
+    audio_data = config.audio_data
+    devices = list(soco.discover())
     for device in devices:
-        if device.get_current_track_info()['artist'] == config.audio_data['artist']:
-            current_devices.append(device)
-            if device.is_coordinator:
-                coordinator = device
+        track_info = device.get_current_track_info()
+        if track_info['artist'] == audio_data['artist'] and track_info['album'] == audio_data['album']:
+            device.stop()
 
-    # Fade out volume
-    ajust_volume(current_devices, None)
+def main(track_type):
+    try:
+        print('Starting: {}'.format(track_type))
+        # create an instance of all sonos devices
+        devices, coordinator = get_devices()
 
-    # let the volume fade out before stopping
-    print('Stopping: {}'.format(track_type))
-    time.sleep(60)
-    coordinator.stop()
+        # get track durations
+        if track_type == 'random':
+            duration = config.duration
+        else:
+            duration = config.schedule[track_type]['duration']
+
+        # get the queue ready, select and add track
+        coordinator.clear_queue()
+        track = get_track(coordinator, track_type)
+        coordinator.add_to_queue(track)
+
+        # set volume
+        ajust_volume(devices, True)
+
+        # files are supposed to be 10 hours log, don't go past 5 hours
+        # in case one isn't
+        random_timestamp = '{}:{}:{}'.format(
+                str(random.randrange(0, 5)).zfill(2), 
+                str(random.randrange(0, 59)).zfill(2), 
+                str(random.randrange(0, 59)).zfill(2)
+            )
+
+        # there should only be 1 track on the
+        coordinator.play_from_queue(index=0)
+        coordinator.seek(random_timestamp)
+
+        # play ambiance for desired time
+        time.sleep(duration-60)
+
+        devices = get_devices()
+
+        current_devices = []
+        for device in devices:
+            if device.get_current_track_info()['artist'] == config.audio_data['artist']:
+                current_devices.append(device)
+                if device.is_coordinator:
+                    coordinator = device
+
+        # Fade out volume
+        ajust_volume(current_devices, None)
+
+        # let the volume fade out before stopping
+        print('Stopping: {}'.format(track_type))
+        time.sleep(60)
+        coordinator.stop()
+    except (KeyboardInterrupt, SystemExit):
+        app_exit()
 
 if __name__ == '__main__':
     scheduler = BlockingScheduler()
@@ -167,4 +178,4 @@ if __name__ == '__main__':
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
-        pass
+        exit()

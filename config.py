@@ -5,10 +5,13 @@ event_range = [6, 8]
 # select volume
 volume = 30
 
+# tracks to ignore in random, can be added in fixed schedule
+blacklist = [ 'Night' ]
+
 # fixed schedule, what time it starts and what track to use.
 schedule = {
     'morning': {
-        'start': 7,
+        'start': 7, # 7am
         'track': 'Birds',
         'duration': 7200 # 3 hours
     },
