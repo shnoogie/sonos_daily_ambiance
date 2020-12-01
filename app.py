@@ -96,7 +96,6 @@ def generate_schedule(first=False):
     if first is True:
         # job will start when first launched, create a job to end it
         # get current hour and minute
-        print("test")
         hour = datetime.datetime.today().hour
         minute = datetime.datetime.today().minute
         hour, minute = calculate_duration(hour, minute)
@@ -158,13 +157,17 @@ def calculate_duration(hour, minute):
     return hour, minute
 
 def stop_ambiance():
+    current_time = datetime.datetime.today().strftime('%m/%d/%Y %H:%M')
+    print('Stopping at {}'.format(current_time))
     devices, coordinator = get_devices(start=False)
     ajust_volume(False)
     time.sleep(15)
-    coordinator.stop()
+    if coordinator:
+        coordinator.stop()
 
 def start_ambiance(track_type):
-    print('Starting: {}'.format(track_type))
+    current_time = datetime.datetime.today().strftime('%m/%d/%Y %H:%M')
+    print('Starting {} at {}'.format(track_type, current_time))
     # create an instance of all sonos devices
     devices, coordinator = get_devices()
 
@@ -222,8 +225,8 @@ if __name__ == '__main__':
     scheduler = BlockingScheduler()
 
     # generate first set of random weather
-    start_ambiance('random')
-    generate_schedule(first=True)
+    #start_ambiance('random')
+    generate_schedule(first=False)
 
     try:
         scheduler.start()
