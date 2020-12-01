@@ -6,7 +6,7 @@ event_range = [6, 8]
 volume = 30
 
 # tracks to ignore in random, can be added in fixed schedule
-blacklist = [ 'Night' ]
+blacklist = [ 'Night']
 
 # fixed schedule, what time it starts and what track to use.
 schedule = {

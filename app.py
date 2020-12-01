@@ -28,39 +28,59 @@ def get_track(device, track_type):
         track = device.music_library.search_track(artist, album=album, track=selection, full_album_art_uri=False)
         return track[0]
 
-def get_devices():
+def get_devices(new=True):
     # create an empty list for devices to populate into
     devices = list(soco.discover())
-    coordinator = None
-    device_list = []
-    #### if you want to select or whitelist rooms ####
-    #temp_device = []
-    #count = 0
-    #for device in devices:
-    #    player_name = device.player_name
-    #    if player_name == 'Office':
-    #        temp_device.append(devices[count])
-    #    count += 1
-    #return temp_device
-    i = 0
-    # run twice to ensure all non-grouped devices are added.
-    while 2 > i:
-        for device in devices:
-            if device.is_coordinator:
-                if device.get_current_transport_info()['current_transport_state'] != 'PLAYING':
-                    if coordinator != device:
-                        if not coordinator:
-                            coordinator = device
-                            device_list.append(device)
-                        else:
-                            device.join(coordinator)
-                            device_list.append(device)
-        i += 1
+    if new:
+        coordinator = None
+        device_list = []
+        #### if you want to select or whitelist rooms ####
+        #temp_device = []
+        #count = 0
+        #for device in devices:
+        #    player_name = device.player_name
+        #    if player_name == 'Office':
+        #        temp_device.append(devices[count])
+        #    count += 1
+        #return temp_device
+        i = 0
+        # run twice to ensure all non-grouped devices are added.
+        while 2 > i:
+            for device in devices:
+                if device.is_coordinator:
+                    if device.get_current_transport_info()['current_transport_state'] != 'PLAYING':
+                        if coordinator != device:
+                            if not coordinator:
+                                coordinator = device
+                                device_list.append(device)
+                            else:
+                                device.join(coordinator)
+                                device_list.append(device)
+            i += 1
+    else: # get current renewed list because things can change
+        device_list = []
+        members = []
+        audio_data = config.audio_data
+        i = 0
+        while 4 > i:
+            for device in devices:
+                track_info = device.get_current_track_info()
+                if track_info['artist'] == audio_data['artist'] and track_info['album'] == audio_data['album']:
+                    coordinator = device
+                    members = list(device.group.members)
+                else:
+                    if members:
+                        if device in members:
+                            if device not in device_list:
+                                device_list.append(device)
+            i += 1
 
     return device_list, coordinator
 
-def ajust_volume(devices, volume_type):
-    if volume_type:
+def ajust_volume(on):
+    devices, coordinator = get_devices(new=False)
+
+    if on:
         volume = config.volume
         for device in devices:
             device.ramp_to_volume(volume, ramp_type='SLEEP_TIMER_RAMP_TYPE')
@@ -105,67 +125,62 @@ def generate_schedule():
 
     scheduler.print_jobs()
 
-def app_exit():
-    audio_data = config.audio_data
-    devices = list(soco.discover())
-    for device in devices:
-        track_info = device.get_current_track_info()
-        if track_info['artist'] == audio_data['artist'] and track_info['album'] == audio_data['album']:
-            device.stop()
+def stop_audio():
+    devices, coordinator = get_devices(new=False)
+    ajust_volume(False)
+    time.sleep(15)
+    coordinator.stop()
 
 def main(track_type):
+    print('Starting: {}'.format(track_type))
+    # create an instance of all sonos devices
+    devices, coordinator = get_devices()
+
+    if coordinator is None:
+        print('No speakers available. Exiting.')
+        exit()
+
+    # get track durations
+    if track_type == 'random':
+        duration = config.duration
+    else:
+        duration = config.schedule[track_type]['duration']
+
+    # get the queue ready, select and add track
+    coordinator.clear_queue()
+    track = get_track(coordinator, track_type)
+    coordinator.add_to_queue(track)
+
+    # set volume
+    ajust_volume(True)
+
+    # files are supposed to be 10 hours log, don't go past 5 hours
+    # in case one isn't
+    random_timestamp = '{}:{}:{}'.format(
+            str(random.randrange(0, 5)).zfill(2), 
+            str(random.randrange(0, 59)).zfill(2), 
+            str(random.randrange(0, 59)).zfill(2)
+        )
+
+    # there should only be 1 track on the
+    coordinator.play_from_queue(index=0)
+    coordinator.seek(random_timestamp)
+
+    # play ambiance for desired time
     try:
-        print('Starting: {}'.format(track_type))
-        # create an instance of all sonos devices
-        devices, coordinator = get_devices()
-
-        # get track durations
-        if track_type == 'random':
-            duration = config.duration
-        else:
-            duration = config.schedule[track_type]['duration']
-
-        # get the queue ready, select and add track
-        coordinator.clear_queue()
-        track = get_track(coordinator, track_type)
-        coordinator.add_to_queue(track)
-
-        # set volume
-        ajust_volume(devices, True)
-
-        # files are supposed to be 10 hours log, don't go past 5 hours
-        # in case one isn't
-        random_timestamp = '{}:{}:{}'.format(
-                str(random.randrange(0, 5)).zfill(2), 
-                str(random.randrange(0, 59)).zfill(2), 
-                str(random.randrange(0, 59)).zfill(2)
-            )
-
-        # there should only be 1 track on the
-        coordinator.play_from_queue(index=0)
-        coordinator.seek(random_timestamp)
-
-        # play ambiance for desired time
         time.sleep(duration-60)
-
-        devices = get_devices()
-
-        current_devices = []
-        for device in devices:
-            if device.get_current_track_info()['artist'] == config.audio_data['artist']:
-                current_devices.append(device)
-                if device.is_coordinator:
-                    coordinator = device
-
-        # Fade out volume
-        ajust_volume(current_devices, None)
-
-        # let the volume fade out before stopping
-        print('Stopping: {}'.format(track_type))
-        time.sleep(60)
-        coordinator.stop()
     except (KeyboardInterrupt, SystemExit):
-        app_exit()
+        stop_audio()
+        exit()
+
+    devices, coordinator = get_devices()
+
+    stop_audio()
+
+    # let the volume fade out before stopping
+    print('Stopping: {}'.format(track_type))
+    time.sleep(60)
+    coordinator.stop()
 
 if __name__ == '__main__':
     scheduler = BlockingScheduler()
