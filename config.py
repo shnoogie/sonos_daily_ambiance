@@ -1,24 +1,24 @@
 # how long a random event should last
-duration = 1800 # 30 min
+duration = 30 # 30 min
 # how many events occur in a day
 event_range = [6, 8]
 # select volume
-volume = 30
+base_volume = 20
 
 # tracks to ignore in random, can be added in fixed schedule
-blacklist = [ 'Night']
+track_blacklist = [ 'Night']
 
 # fixed schedule, what time it starts and what track to use.
 schedule = {
     'morning': {
         'start': 7, # 7am
         'track': 'Birds',
-        'duration': 7200 # 3 hours
+        'duration': 3 # 3 hours
     },
     'evening': {
         'start': 20, # 8pm
         'track': 'Night',
-        'duration': 3600 # 1 hour
+        'duration': 1 # 1 hour
     }
 }
 

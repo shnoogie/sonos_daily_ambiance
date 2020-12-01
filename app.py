@@ -1,7 +1,5 @@
-import soco 
 from apscheduler.schedulers.blocking import BlockingScheduler
-from datetime import date
-import random, time
+import random, time, datetime, soco
 import config
 
 def get_track(device, track_type):
@@ -12,7 +10,7 @@ def get_track(device, track_type):
         
         # blacklisting static sounds
         # blacklist = [ config.schedule[item]['track'] for item in config.schedule ]
-        blacklist = config.blacklist
+        blacklist = config.track_blacklist
 
         for track in tracks:
             if track.title not in blacklist:
@@ -28,10 +26,10 @@ def get_track(device, track_type):
         track = device.music_library.search_track(artist, album=album, track=selection, full_album_art_uri=False)
         return track[0]
 
-def get_devices(new=True):
+def get_devices(start=True):
     # create an empty list for devices to populate into
     devices = list(soco.discover())
-    if new:
+    if start:
         coordinator = None
         device_list = []
         #### if you want to select or whitelist rooms ####
@@ -62,7 +60,7 @@ def get_devices(new=True):
         members = []
         audio_data = config.audio_data
         i = 0
-        while 4 > i:
+        while 2 > i:
             for device in devices:
                 track_info = device.get_current_track_info()
                 if track_info['artist'] == audio_data['artist'] and track_info['album'] == audio_data['album']:
@@ -78,31 +76,45 @@ def get_devices(new=True):
     return device_list, coordinator
 
 def ajust_volume(on):
-    devices, coordinator = get_devices(new=False)
-
-    if on:
-        volume = config.volume
+    devices, coordinator = get_devices(start=False)
+    if on is True:
+        volume = config.base_volume
         for device in devices:
-            device.ramp_to_volume(volume, ramp_type='SLEEP_TIMER_RAMP_TYPE')
-    else:
+            device.ramp_to_volume(volume, ramp_type='ALARM_RAMP_TYPE')
+    elif on is False:
         volume = 0
         for device in devices:
-            device.ramp_to_volume(volume, ramp_type='SLEEP_TIMER_RAMP_TYPE')
+            device.ramp_to_volume(volume, ramp_type='ALARM_RAMP_TYPE')
 
-def generate_schedule():
+def generate_schedule(first=False):
+    end_date = '{} 20:00:00'.format(datetime.date.today())
+
     # remove jobs and start again
     for job in scheduler.get_jobs():
         job.remove()
+
+    if first is True:
+        # job will start when first launched, create a job to end it
+        # get current hour and minute
+        print("test")
+        hour = datetime.datetime.today().hour
+        minute = datetime.datetime.today().minute
+        hour, minute = calculate_duration(hour, minute)
+        scheduler.add_job(stop_ambiance, 'cron', hour=hour, minute=minute, jitter=900, end_date=end_date)
 
     # add the weather scheduler
     scheduler.add_job(generate_schedule, 'cron', hour=1, minute=0)
 
     # get the fixed schedules added
     for event in config.schedule:
-        scheduler.add_job(main, 'cron', [event], hour=config.schedule[event]['start'], minute=0)
+        hour = config.schedule[event]['start']
+        scheduler.add_job(start_ambiance, 'cron', [event], hour=hour, minute=0)
+        #create a stop job
+        end_hour = hour + config.schedule[event]['duration']
+        scheduler.add_job(stop_ambiance, 'cron', hour=end_hour, minute=0)
+
 
     # generate weather events
-    end_date = '{} 20:00:00'.format(date.today())
     events = []
     event_count = random.randrange(config.event_range[0], config.event_range[1])
     high = config.schedule['evening']['start'] - 2
@@ -121,17 +133,37 @@ def generate_schedule():
         i += 1
 
     for event in events:
-        scheduler.add_job(main, 'cron', ['random'], hour=event[0], minute=event[1], jitter=900, end_date=end_date)
+        hour = int(event[0])
+        minute = int(event[1])
+        # add some entropy, humans crave that
+        minute = minute + random.randint(1,59)
+        hour, minute = calculate_duration(hour, minute)
+
+        scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute, jitter=900, end_date=end_date)
 
     scheduler.print_jobs()
 
-def stop_audio():
-    devices, coordinator = get_devices(new=False)
+def calculate_duration(hour, minute):
+# caclulate the new timestamp based on duration from config
+    ambiance_duration = config.duration
+    minute = minute + ambiance_duration
+    if minute >= 60:
+        hour = hour + 1
+        remainder = minute % 60
+        if remainder >= 60:
+            minute = remainder - 60
+        else:
+            minute = remainder
+
+    return hour, minute
+
+def stop_ambiance():
+    devices, coordinator = get_devices(start=False)
     ajust_volume(False)
     time.sleep(15)
     coordinator.stop()
 
-def main(track_type):
+def start_ambiance(track_type):
     print('Starting: {}'.format(track_type))
     # create an instance of all sonos devices
     devices, coordinator = get_devices()
@@ -166,31 +198,34 @@ def main(track_type):
     coordinator.play_from_queue(index=0)
     coordinator.seek(random_timestamp)
 
+    ######
+    # Old way to have stop ambiance
+    ######
+
     # play ambiance for desired time
-    try:
-        time.sleep(duration-60)
-    except (KeyboardInterrupt, SystemExit):
-        stop_audio()
-        exit()
+    #try:
+    #    time.sleep(duration-60)
+    #except (KeyboardInterrupt, SystemExit):
+    #    stop_ambiance()
+    #    exit()
 
-    devices, coordinator = get_devices()
+    #devices, coordinator = get_devices()
 
-    stop_audio()
+    #stop_ambiance()
 
     # let the volume fade out before stopping
-    print('Stopping: {}'.format(track_type))
-    time.sleep(60)
-    coordinator.stop()
+    #print('Stopping: {}'.format(track_type))
+    #time.sleep(60)
+    #coordinator.stop()
 
 if __name__ == '__main__':
     scheduler = BlockingScheduler()
 
     # generate first set of random weather
-    generate_schedule()
-
-    main('random')
+    start_ambiance('random')
+    generate_schedule(first=True)
 
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
-        exit()
+        stop_ambiance()
