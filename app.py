@@ -99,7 +99,7 @@ def generate_schedule(first=False):
         hour = datetime.datetime.today().hour
         minute = datetime.datetime.today().minute
         hour, minute = calculate_duration(hour, minute)
-        scheduler.add_job(stop_ambiance, 'cron', hour=hour, minute=minute, jitter=900, end_date=end_date)
+        scheduler.add_job(stop_ambiance, 'cron', hour=hour, minute=minute, end_date=end_date)
 
     # add the weather scheduler
     scheduler.add_job(generate_schedule, 'cron', hour=1, minute=0)
@@ -142,8 +142,8 @@ def generate_schedule(first=False):
 
         stop_hour, stop_minute = calculate_duration(hour, minute)
 
-        scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute, jitter=900, end_date=end_date)
-        scheduler.add_job(stop_ambiance, 'cron', hour=stop_hour, minute=stop_minute, jitter=900, end_date=end_date)
+        scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute, end_date=end_date)
+        scheduler.add_job(stop_ambiance, 'cron', hour=stop_hour, minute=stop_minute, end_date=end_date)
 
     scheduler.print_jobs()
 
