@@ -135,7 +135,11 @@ def generate_schedule(first=False):
         hour = int(event[0])
         minute = int(event[1])
         # add some entropy, humans crave that
-        minute = minute + random.randint(1,29)
+        if minute < 30:
+            minute = minute + random.randint(1,29)
+        elif minute == 30:
+            minute = minute + random.randint(1,20)
+
         stop_hour, stop_minute = calculate_duration(hour, minute)
 
         scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute, jitter=900, end_date=end_date)
