@@ -59,6 +59,7 @@ def get_devices(start=True):
         device_list = []
         members = []
         audio_data = config.audio_data
+        coordinator = None
         i = 0
         while 2 > i:
             for device in devices:
@@ -191,9 +192,6 @@ def start_ambiance(track_type):
     track = get_track(coordinator, track_type)
     coordinator.add_to_queue(track)
 
-    # set volume
-    ajust_volume(True)
-
     # files are supposed to be 10 hours log, don't go past 5 hours
     # in case one isn't
     random_timestamp = '{}:{}:{}'.format(
@@ -205,6 +203,9 @@ def start_ambiance(track_type):
     # there should only be 1 track on the
     coordinator.play_from_queue(index=0)
     coordinator.seek(random_timestamp)
+
+    # set volume
+    ajust_volume(True)
 
     ######
     # Old way to have stop ambiance
