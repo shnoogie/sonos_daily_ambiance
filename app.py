@@ -66,6 +66,7 @@ def get_devices(start=True):
                 track_info = device.get_current_track_info()
                 if track_info['artist'] == audio_data['artist'] and track_info['album'] == audio_data['album']:
                     coordinator = device
+                    device_list.append(device)
                     members = list(device.group.members)
                 else:
                     if members:
@@ -231,7 +232,7 @@ if __name__ == '__main__':
     scheduler = BlockingScheduler()
 
     # generate first set of random weather
-    #start_ambiance('random')
+    #start_ambiance('evening')
     generate_schedule(first=False)
 
     try:
