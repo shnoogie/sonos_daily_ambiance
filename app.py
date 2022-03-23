@@ -8,8 +8,6 @@ def get_track(device, track_type):
         tracks = device.music_library.get_albums('albums', subcategories=[config.audio_data['album']])
         track_list = []
         
-        # blacklisting static sounds
-        # blacklist = [ config.schedule[item]['track'] for item in config.schedule ]
         blacklist = config.track_blacklist
 
         for track in tracks:
@@ -118,8 +116,8 @@ def generate_schedule(first=False):
     # generate weather events
     events = []
     event_count = random.randrange(config.event_range[0], config.event_range[1])
-    high = config.schedule['evening']['start'] - 2
-    low = config.schedule['morning']['start'] + 2
+    high = config.schedule['evening']['start'] - 1
+    low = config.schedule['morning']['start'] + 1
     duration = high - low
     padding = round(duration / event_count, 2)
 
@@ -142,26 +140,9 @@ def generate_schedule(first=False):
         elif minute == 30:
             minute = minute + random.randint(1,20)
 
-        stop_hour, stop_minute = calculate_duration(hour, minute)
-
         scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute, end_date=end_date)
-        scheduler.add_job(stop_ambiance, 'cron', hour=stop_hour, minute=stop_minute, end_date=end_date)
 
     scheduler.print_jobs()
-
-def calculate_duration(hour, minute):
-# caclulate the new timestamp based on duration from config
-    ambiance_duration = config.duration
-    minute = minute + ambiance_duration
-    if minute >= 60:
-        hour = hour + 1
-        remainder = minute % 60
-        if remainder >= 60:
-            minute = remainder - 60
-        else:
-            minute = remainder
-
-    return hour, minute
 
 def stop_ambiance():
     current_time = datetime.datetime.today().strftime('%m/%d/%Y %H:%M')
@@ -171,6 +152,36 @@ def stop_ambiance():
     time.sleep(15)
     if coordinator:
         coordinator.stop()
+
+def generate_timestamps(track_duration):
+    now = datetime.datetime.now().timestamp()
+
+    play_duration = '00:{}:00'.format(random.randrange(config.duration[0], config.duration[1]))
+    play_duration = time.strptime(play_duration,'%H:%M:%S')
+    play_duration = datetime.timedelta(hours=play_duration.tm_hour,minutes=play_duration.tm_min,seconds=play_duration.tm_sec).total_seconds()
+
+    track_duration = time.strptime(track_duration,'%H:%M:%S')
+    track_duration = datetime.timedelta(hours=track_duration.tm_hour,minutes=track_duration.tm_min,seconds=track_duration.tm_sec).total_seconds()
+
+    start_max = track_duration - play_duration
+    start_time = 0
+
+    # if the track time is shorter then the max potental play time then start from 0
+    if track_duration > config.duration[1]*60: # convert to minutes
+        start_time = random.randrange(0, start_max)
+    else:
+        start_time = 0
+
+    stop_time = now + play_duration
+    
+    stop_time = datetime.datetime.fromtimestamp(stop_time)
+    stop_time = [stop_time.hour, stop_time.minute]
+
+    start_time = str(datetime.timedelta(seconds=start_time))
+    play_duration = str(datetime.timedelta(seconds=play_duration))
+    
+    return start_time, stop_time
+
 
 def start_ambiance(track_type):
     current_time = datetime.datetime.today().strftime('%m/%d/%Y %H:%M')
@@ -182,60 +193,34 @@ def start_ambiance(track_type):
         print('No speakers available. Exiting.')
         exit()
 
-    # get track durations
-    if track_type == 'random':
-        duration = config.duration
-    else:
-        duration = config.schedule[track_type]['duration']
-
     # get the queue ready, select and add track
     coordinator.clear_queue()
     track = get_track(coordinator, track_type)
     coordinator.add_to_queue(track)
 
-    # files are supposed to be 10 hours log, don't go past 5 hours
-    # in case one isn't
-    random_timestamp = '{}:{}:{}'.format(
-            str(random.randrange(0, 5)).zfill(2), 
-            str(random.randrange(0, 59)).zfill(2), 
-            str(random.randrange(0, 59)).zfill(2)
-        )
+    # select random position to start based on track duration
+    track_info = coordinator.get_current_track_info()
+    start_time, stop_time = generate_timestamps(track_info['duration'])
 
-    # there should only be 1 track on the
+    print('Stopping at {}:{}'.format(stop_time[0], stop_time[1]))
+    scheduler.add_job(stop_ambiance, 'cron', hour=stop_time[0], minute=stop_time[1])
+
+    # there should only be 1 track on the queue
     coordinator.play_from_queue(index=0)
-    coordinator.seek(random_timestamp)
+    coordinator.seek(start_time)
 
     # set volume
     ajust_volume(True)
 
-    ######
-    # Old way to have stop ambiance
-    ######
-
-    # play ambiance for desired time
-    #try:
-    #    time.sleep(duration-60)
-    #except (KeyboardInterrupt, SystemExit):
-    #    stop_ambiance()
-    #    exit()
-
-    #devices, coordinator = get_devices()
-
-    #stop_ambiance()
-
-    # let the volume fade out before stopping
-    #print('Stopping: {}'.format(track_type))
-    #time.sleep(60)
-    #coordinator.stop()
 
 if __name__ == '__main__':
     scheduler = BlockingScheduler()
 
     # generate first set of random weather
-    #start_ambiance('evening')
     generate_schedule(first=False)
 
     try:
         scheduler.start()
+        start_ambiance('random')
     except (KeyboardInterrupt, SystemExit):
         stop_ambiance()
