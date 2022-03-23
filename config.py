@@ -1,3 +1,17 @@
+import os
+
+# default timezone
+if os.environ.get('APP_TIMEZONE'):
+    timezone = os.environ.get('APP_TIMEZONE')
+else:
+    timezone = "UTC"
+
+# schedule to run after start
+if os.environ.get('APP_RUNONSTART') == "True":
+    run_on_start = True
+else:
+    run_on_start = False
+
 # range of time for a track to place
 duration = [15, 30] #whole numbers in min
 

@@ -86,20 +86,12 @@ def ajust_volume(on):
         for device in devices:
             device.ramp_to_volume(volume, ramp_type='ALARM_RAMP_TYPE')
 
-def generate_schedule(first=False):
+def generate_schedule():
     end_date = '{} 20:00:00'.format(datetime.date.today())
 
     # remove jobs and start again
     for job in scheduler.get_jobs():
         job.remove()
-
-    if first is True:
-        # job will start when first launched, create a job to end it
-        # get current hour and minute
-        hour = datetime.datetime.today().hour
-        minute = datetime.datetime.today().minute
-        hour, minute = calculate_duration(hour, minute)
-        scheduler.add_job(stop_ambiance, 'cron', hour=hour, minute=minute, end_date=end_date)
 
     # add the weather scheduler
     scheduler.add_job(generate_schedule, 'cron', hour=1, minute=0)
@@ -145,8 +137,8 @@ def generate_schedule(first=False):
     scheduler.print_jobs()
 
 def stop_ambiance():
-    current_time = datetime.datetime.today().strftime('%m/%d/%Y %H:%M')
-    print('Stopping at {}'.format(current_time))
+    current_time = datetime.datetime.today().strftime('%H:%M')
+    print('Stopping - {}'.format(current_time))
     devices, coordinator = get_devices(start=False)
     ajust_volume(False)
     time.sleep(15)
@@ -184,8 +176,8 @@ def generate_timestamps(track_duration):
 
 
 def start_ambiance(track_type):
-    current_time = datetime.datetime.today().strftime('%m/%d/%Y %H:%M')
-    print('Starting {} at {}'.format(track_type, current_time))
+    current_time = datetime.datetime.today().strftime('%H:%M')
+    print('Running {} on {}'.format(track_type, current_time))
     # create an instance of all sonos devices
     devices, coordinator = get_devices()
 
@@ -202,7 +194,7 @@ def start_ambiance(track_type):
     track_info = coordinator.get_current_track_info()
     start_time, stop_time = generate_timestamps(track_info['duration'])
 
-    print('Stopping at {}:{}'.format(stop_time[0], stop_time[1]))
+    print('Adding stop schedule for {} on {}:{}'.format(track_type, stop_time[0], stop_time[1]))
     scheduler.add_job(stop_ambiance, 'cron', hour=stop_time[0], minute=stop_time[1])
 
     # there should only be 1 track on the queue
@@ -214,13 +206,19 @@ def start_ambiance(track_type):
 
 
 if __name__ == '__main__':
-    scheduler = BlockingScheduler()
+    try:
+        scheduler = BlockingScheduler(timezone=config.timezone)
+    except Exception as e:
+        print(e)
+        exit()
 
     # generate first set of random weather
-    generate_schedule(first=False)
+    generate_schedule()
+
+    if config.run_on_start:
+        start_ambiance('random')
 
     try:
         scheduler.start()
-        start_ambiance('random')
     except (KeyboardInterrupt, SystemExit):
         stop_ambiance()
