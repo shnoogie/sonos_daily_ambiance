@@ -24,6 +24,7 @@ def get_track(device, track_type):
         track = device.music_library.search_track(artist, album=album, track=selection, full_album_art_uri=False)
         return track[0]
 
+
 def get_devices(start=True):
     # create an empty list for devices to populate into
     devices = list(soco.discover())
@@ -75,6 +76,7 @@ def get_devices(start=True):
 
     return device_list, coordinator
 
+
 def ajust_volume(on):
     devices, coordinator = get_devices(start=False)
     if on is True:
@@ -86,7 +88,10 @@ def ajust_volume(on):
         for device in devices:
             device.ramp_to_volume(volume, ramp_type='ALARM_RAMP_TYPE')
 
+
 def generate_schedule():
+    event_count = random.randrange(config.event_range[0], config.event_range[1])
+    log('Generating schedule. Adding {} events'.format(event_count+len(config.schedule)))
     end_date = '{} 20:00:00'.format(datetime.date.today())
 
     # remove jobs and start again
@@ -99,6 +104,7 @@ def generate_schedule():
     # get the fixed schedules added
     for event in config.schedule:
         hour = config.schedule[event]['start']
+        log('Adding event {} at {}:00'.format(event, hour))
         scheduler.add_job(start_ambiance, 'cron', [event], hour=hour, minute=0)
         #create a stop job
         end_hour = hour + config.schedule[event]['duration']
@@ -107,7 +113,6 @@ def generate_schedule():
 
     # generate weather events
     events = []
-    event_count = random.randrange(config.event_range[0], config.event_range[1])
     high = config.schedule['evening']['start'] - 1
     low = config.schedule['morning']['start'] + 1
     duration = high - low
@@ -132,18 +137,22 @@ def generate_schedule():
         elif minute == 30:
             minute = minute + random.randint(1,20)
 
-        scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute, end_date=end_date)
+        log('Adding event {} at {}:{}'.format('random', hour, minute))
 
-    scheduler.print_jobs()
+        scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute)
+
+    #scheduler.print_jobs()
+
 
 def stop_ambiance():
     current_time = datetime.datetime.today().strftime('%H:%M')
-    print('Stopping - {}'.format(current_time))
+    log('Stopping')
     devices, coordinator = get_devices(start=False)
     ajust_volume(False)
-    time.sleep(15)
+    time.sleep(5)
     if coordinator:
         coordinator.stop()
+
 
 def generate_timestamps(track_duration):
     now = datetime.datetime.now().timestamp()
@@ -177,13 +186,13 @@ def generate_timestamps(track_duration):
 
 def start_ambiance(track_type):
     current_time = datetime.datetime.today().strftime('%H:%M')
-    print('Running {} on {}'.format(track_type, current_time))
+    log('Starting {}'.format(track_type, current_time))
     # create an instance of all sonos devices
     devices, coordinator = get_devices()
 
     if coordinator is None:
-        print('No speakers available. Exiting.')
-        exit()
+        log('No speakers available.')
+        return None
 
     # get the queue ready, select and add track
     coordinator.clear_queue()
@@ -194,7 +203,7 @@ def start_ambiance(track_type):
     track_info = coordinator.get_current_track_info()
     start_time, stop_time = generate_timestamps(track_info['duration'])
 
-    print('Adding stop schedule for {} on {}:{}'.format(track_type, stop_time[0], stop_time[1]))
+    log('Adding stop event at {}:{}'.format(stop_time[0], stop_time[1]))
     scheduler.add_job(stop_ambiance, 'cron', hour=stop_time[0], minute=stop_time[1])
 
     # there should only be 1 track on the queue
@@ -205,11 +214,20 @@ def start_ambiance(track_type):
     ajust_volume(True)
 
 
+def log(message):
+    current_time = datetime.datetime.today().strftime('%m/%d/%Y %H:%M')
+    message = '{}: {}'.format(current_time, message)
+    print(message)
+    with open('log.txt', 'a') as file:
+        file.write(message+'\n')
+
+
 if __name__ == '__main__':
+    log('App starting.\nEnvironment: timezone={}, run_on_start={}'.format(config.timezone, config.run_on_start))
     try:
         scheduler = BlockingScheduler(timezone=config.timezone)
     except Exception as e:
-        print(e)
+        log(e)
         exit()
 
     # generate first set of random weather

@@ -18,7 +18,7 @@ duration = [15, 30] #whole numbers in min
 # how many events occur in a day
 event_range = [8, 12]
 # select volume
-base_volume = 40
+base_volume = 30
 
 # tracks to ignore in random, can be added in fixed schedule
 track_blacklist = ['Night']
