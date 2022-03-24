@@ -1,8 +1,8 @@
 import os
 
 # default timezone
-if os.environ.get('APP_TIMEZONE'):
-    timezone = os.environ.get('APP_TIMEZONE')
+if os.environ.get('TZ'):
+    timezone = os.environ.get('TZ')
 else:
     timezone = "UTC"
 
