@@ -82,11 +82,14 @@ def ajust_volume(on):
     if on is True:
         volume = config.base_volume
         for device in devices:
-            device.ramp_to_volume(volume, ramp_type='ALARM_RAMP_TYPE')
+            device.set_relative_volume(-100)
+            ramp_time = device.ramp_to_volume(volume, ramp_type='SLEEP_TIMER_RAMP_TYPE')
+        return ramp_time
     elif on is False:
-        volume = 0
+        volume = 1
         for device in devices:
-            device.ramp_to_volume(volume, ramp_type='ALARM_RAMP_TYPE')
+            ramp_time = device.ramp_to_volume(volume, ramp_type='SLEEP_TIMER_RAMP_TYPE')
+        return ramp_time
 
 
 def generate_schedule():
@@ -148,8 +151,8 @@ def stop_ambiance():
     current_time = datetime.datetime.today().strftime('%H:%M')
     log('Stopping')
     devices, coordinator = get_devices(start=False)
-    ajust_volume(False)
-    time.sleep(5)
+    ramp_time = ajust_volume(False)
+    time.sleep(ramp_time + 5)
     if coordinator:
         coordinator.stop()
 
@@ -203,15 +206,17 @@ def start_ambiance(track_type):
     track_info = coordinator.get_current_track_info()
     start_time, stop_time = generate_timestamps(track_info['duration'])
 
-    log('Adding stop event at {}:{}'.format(stop_time[0], stop_time[1]))
-    scheduler.add_job(stop_ambiance, 'cron', hour=stop_time[0], minute=stop_time[1])
+    # add stop event if the track is random
+    if track_type == 'random':
+        log('Adding stop event at {}:{}'.format(stop_time[0], stop_time[1]))
+        scheduler.add_job(stop_ambiance, 'cron', hour=stop_time[0], minute=stop_time[1])
+
+    # set volume
+    ajust_volume(True)
 
     # there should only be 1 track on the queue
     coordinator.play_from_queue(index=0)
     coordinator.seek(start_time)
-
-    # set volume
-    ajust_volume(True)
 
 
 def log(message):
