@@ -1,4 +1,4 @@
-import os
+import os, yaml
 
 # default timezone
 if os.environ.get('TZ'):
@@ -12,50 +12,34 @@ if os.environ.get('APP_RUNONSTART') == "True":
 else:
     run_on_start = False
 
-# range of time for a track to place
-duration = [15, 30] #whole numbers in min
+# schedule to run after start
+if os.environ.get('APP_CONFIG'):
+    config_file = 'config/{}'.format(os.environ.get('APP_CONFIG'))
+else:
+    config_file = 'config/config.yaml'
 
-# how many events occur in a day
-event_range = [8, 12]
-# select volume
-base_volume = 30
+with open(config_file, 'r') as yamlfile:
+    yaml_config = yaml.load(yamlfile, Loader=yaml.FullLoader)
 
-# tracks to ignore in random, can be added in fixed schedule
-track_blacklist = ['Night']
+album = yaml_config['ambiance settings']['album']
+artist = yaml_config['ambiance settings']['artist']
+duration_range = yaml_config['ambiance settings']['duration range']
+event_range = yaml_config['ambiance settings']['event range']
+base_volume = yaml_config['ambiance settings']['volume']
+operation_time = yaml_config['ambiance settings']['operation time']
 
-'''
-# Following options are optional
-device_custom_setting = {
-    'device name': {
-        'volume': 5, # custom volume
-        'enabled': False # disable the speaker from ambiance
-    }
-}
-'''
+# Optionals
+if 'track blacklist' in yaml_config:
+    track_blacklist = yaml_config['track blacklist']
+else:
+    track_blacklist = None
 
-device_custom_setting = {
-    'TV Room': {
-        'volume': 20
-    },
-}
+if 'device settings' in yaml_config:
+    device_settings = yaml_config['device settings']
+else:
+    device_settings = None
 
-# fixed schedule, what time it starts and what track to use.
-schedule = {
-    'morning': {
-        'start': 7, # 7am
-        'track': 'Birds',
-        'duration': 1 # 1 hours
-    },
-    'evening': {
-        'start': 20, # 8pm
-        'track': 'Night',
-        'duration': 1 # 1 hour
-    }
-}
-
-# this app uses sonos audio library for tracks
-# to ensure we get correct tracks have album and artist
-audio_data = {
-    'album': 'Home',
-    'artist': 'Ambiance'
-}
+if 'schedule' in yaml_config:
+    schedule = yaml_config['schedule']
+else:
+    schedule = None

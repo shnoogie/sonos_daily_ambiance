@@ -5,10 +5,13 @@ import config
 def get_track(device, track_type):
     if track_type == 'random': 
         # get all the tracks in the album
-        tracks = device.music_library.get_albums('albums', subcategories=[config.audio_data['album']])
+        tracks = device.music_library.get_albums('albums', subcategories=[config.album])
         track_list = []
         
-        blacklist = config.track_blacklist
+        if config.track_blacklist:
+            blacklist = config.track_blacklist
+        else:
+            blacklist = []
 
         for track in tracks:
             if track.title not in blacklist:
@@ -19,81 +22,111 @@ def get_track(device, track_type):
         return random_track
     else:
         selection = config.schedule[track_type]['track']
-        album = config.audio_data['album']
-        artist = config.audio_data['artist']
+        album = config.album
+        artist = config.artist
         track = device.music_library.search_track(artist, album=album, track=selection, full_album_art_uri=False)
         return track[0]
 
 
 def check_blacklist(device):
     device_name = device.player_name
-    if device_name in config.device_custom_setting:
-        if 'enabled' in config.device_custom_setting[device_name]:
-            if config.device_custom_setting[device_name]['enabled'] is False:
-                return True
+    if config.device_settings:
+        if device_name in config.device_settings:
+            if 'enabled' in config.device_settings[device_name]:
+                if config.device_settings[device_name]['enabled'] is False:
+                    return True
     return False
 
 
-def get_devices(start=True):
+def create_group():
     devices = list(soco.discover())
     coordinator = None
     device_list = []
-    audio_data = config.audio_data
 
-    if start:
-        for device in devices:
-            group_coordinator = device.group.coordinator
-            if group_coordinator.get_current_transport_info()['current_transport_state'] != 'PLAYING':
-                if not check_blacklist(device):
-                    if not coordinator:
-                        if device not in device_list:
-                            device.unjoin()
-                            device.set_relative_volume(-100)
-                            coordinator = device
-                            device_list.append(device)
-                    else:
-                        if device not in device_list:
-                            device.join(coordinator)
-                            device.set_relative_volume(-100)
-                            device_list.append(device)
+    for device in devices:
+        group_coordinator = device.group.coordinator
+        if group_coordinator.get_current_transport_info()['current_transport_state'] != 'PLAYING':
+            if not check_blacklist(device):
+                if not coordinator:
+                    device.unjoin()
+                    device.set_relative_volume(-100)
+                    coordinator = device
+                else:
+                    device.unjoin()
+                    device.set_relative_volume(-100)
+                    device_list.append(device)
 
-    # if the device isn't starting get a new list of all devices currently playing ambiance
-    else:
+    for device in device_list:
+        if device is not coordinator:
+            device.join(coordinator)
+
+    # this waits to return till the group is finished being created
+    # with a limit of 10 seconds to prevent infinite loops
+    if coordinator:
+        i = 0
+        while True: 
+            devices, coordinator = get_devices(coordinator)
+            if len(device_list) + 1 == len(devices):
+                break
+            elif i >= 10:
+                break
+            time.sleep(1)
+            i += 1
+
+    return coordinator
+
+
+def get_devices(coordinator=None):
+    devices = list(soco.discover())
+    device_list = []
+    album = config.album
+    artist = config.artist
+
+    if not coordinator:
         for device in devices:
             track_info = device.get_current_track_info()
-            if track_info['artist'] == audio_data['artist'] and track_info['album'] == audio_data['album']:
+            if track_info['artist'] == artist and track_info['album'] == album:
                 group_coordinator = device.group.coordinator
                 if group_coordinator.get_current_transport_info()['current_transport_state'] == 'PLAYING':
                     coordinator = device
                     break
 
-        if not coordinator:
-            return None, None
+    if not coordinator:
+        return None, None
 
-        for member in coordinator.group.members:
-            if not check_blacklist(device):
+    for member in coordinator.group.members:
+        if member.is_visible:
+            if not check_blacklist(member):
                 if member not in device_list:
                     device_list.append(member)
 
     return device_list, coordinator
 
-    
 
-def ajust_volume(on):
-    devices, coordinator = get_devices(start=False)
+def ajust_volume(starting, coordinator=None):
+    if coordinator:
+        devices, coordinator = get_devices(coordinator)
+    else:
+        devices, coordinator = get_devices()
+
     if not devices:
         return False
 
-    if on is True:
+    if starting is True:
+        if config.device_settings:
+            device_settings = config.device_settings
+        else:
+            device_settings = []
+
         for device in devices:
             volume = config.base_volume
             device_name = device.player_name
-            if device_name in config.device_custom_setting:
-                if 'volume' in config.device_custom_setting[device_name]:
-                    volume = config.device_custom_setting[device_name]['volume']
+            if device_name in device_settings:
+                if 'volume' in device_settings[device_name]:
+                    volume = device_settings[device_name]['volume']
             ramp_time = device.ramp_to_volume(volume, ramp_type='SLEEP_TIMER_RAMP_TYPE')
         return ramp_time
-    elif on is False:
+    elif starting is False:
         volume = 1
         for device in devices:
             ramp_time = device.ramp_to_volume(volume, ramp_type='SLEEP_TIMER_RAMP_TYPE')
@@ -101,44 +134,30 @@ def ajust_volume(on):
 
 
 def generate_schedule():
-    event_count = random.randrange(config.event_range[0], config.event_range[1])
-    log('Generating schedule. Adding {} events'.format(event_count+len(config.schedule)))
     end_date = '{} 20:00:00'.format(datetime.date.today())
 
     # remove jobs and start again
     for job in scheduler.get_jobs():
         job.remove()
 
-    # add the weather scheduler
+    # add the event scheduler
     scheduler.add_job(generate_schedule, 'cron', hour=1, minute=0)
 
-    # get the fixed schedules added
-    for event in config.schedule:
-        hour = config.schedule[event]['start']
-        log('Adding event {} at {}:00'.format(event, hour))
-        scheduler.add_job(start_ambiance, 'cron', [event], hour=hour, minute=0)
-        #create a stop job
-        end_hour = hour + config.schedule[event]['duration']
-        scheduler.add_job(stop_ambiance, 'cron', hour=end_hour, minute=0)
-
-
-    # generate weather events
     events = []
-    high = config.schedule['evening']['start'] - 1
-    low = config.schedule['morning']['start'] + 1
-    duration = high - low
-    padding = round(duration / event_count, 2)
-
-    # get the timestamps of each event
-    time_value = low
+    event_count = random.randrange(config.event_range[0], config.event_range[1])
+    start = config.operation_time['start']
+    end = config.operation_time['end']
+    event_window = end - start
+    event_buffer = round(event_window / event_count, 2)
+    time_value = float(start)
     i = 0
+
     while i < event_count:
-        time_value += padding
         x = str(time_value).split('.')
         time = [x[0], int(round(float('.'+x[1]) * 59, 0))]
         events.append(time)
+        time_value += event_buffer
         i += 1
-
     for event in events:
         hour = int(event[0])
         minute = int(event[1])
@@ -152,11 +171,21 @@ def generate_schedule():
 
         scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute)
 
+    if config.schedule:
+        for event in config.schedule:
+            hour = config.schedule[event]['start']
+            log('Adding event {} at {}:00'.format(event, hour))
+            scheduler.add_job(start_ambiance, 'cron', [event], hour=hour, minute=0)
+            end_hour = hour + config.schedule[event]['duration']
+            scheduler.add_job(stop_ambiance, 'cron', hour=end_hour, minute=0)
+            event_count += 1
+
+    log('Generated schedule. Created {} events.'.format(event_count))
+
 
 def stop_ambiance():
-    current_time = datetime.datetime.today().strftime('%H:%M')
     log('Stopping')
-    devices, coordinator = get_devices(start=False)
+    devices, coordinator = get_devices()
     ramp_time = ajust_volume(False)
     time.sleep(ramp_time + 5)
     if coordinator:
@@ -166,7 +195,7 @@ def stop_ambiance():
 def generate_timestamps(track_duration):
     now = datetime.datetime.now().timestamp()
 
-    play_duration = '00:{}:00'.format(random.randrange(config.duration[0], config.duration[1]))
+    play_duration = '00:{}:00'.format(random.randrange(config.duration_range[0], config.duration_range[1]))
     play_duration = time.strptime(play_duration,'%H:%M:%S')
     play_duration = datetime.timedelta(hours=play_duration.tm_hour,minutes=play_duration.tm_min,seconds=play_duration.tm_sec).total_seconds()
 
@@ -177,7 +206,7 @@ def generate_timestamps(track_duration):
     start_time = 0
 
     # if the track time is shorter then the max potental play time then start from 0
-    if track_duration > config.duration[1]*60: # convert to minutes
+    if track_duration > config.duration_range[1]*60: # convert to minutes
         start_time = random.randrange(0, start_max)
     else:
         start_time = 0
@@ -196,12 +225,18 @@ def generate_timestamps(track_duration):
 def start_ambiance(track_type):
     current_time = datetime.datetime.today().strftime('%H:%M')
     log('Starting {}'.format(track_type, current_time))
-    # create an instance of all sonos devices
-    devices, coordinator = get_devices()
+
+    if track_type != 'random':
+        log('Stopping other events for manaully scheduled event')
+        stop_ambiance()
+
+    coordinator = create_group()
 
     if coordinator is None:
         log('No speakers available.')
         return None
+
+    devices, coordinator = get_devices(coordinator)
 
     # get the queue ready, select and add track
     coordinator.clear_queue()
@@ -221,10 +256,7 @@ def start_ambiance(track_type):
     coordinator.play_from_queue(index=0)
     coordinator.seek(start_time)
 
-    # give time for all the speakers to be grouped and set
-    time.sleep(6)
-
-    ajust_volume(True)
+    ajust_volume(True, coordinator=coordinator)
 
 
 def log(message):

@@ -1,0 +1,16 @@
+ambiance settings:
+  album: Home
+  artist: Ambiance
+  duration range:
+  - 15
+  - 30
+  event range:
+  - 8
+  - 10
+  volume: 30
+  operation time:
+    start: 9
+    end: 20
+device settings:
+schedule:
+track blacklist:
