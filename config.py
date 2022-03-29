@@ -23,12 +23,28 @@ base_volume = 30
 # tracks to ignore in random, can be added in fixed schedule
 track_blacklist = ['Night']
 
+'''
+# Following options are optional
+device_custom_setting = {
+    'device name': {
+        'volume': 5, # custom volume
+        'enabled': False # disable the speaker from ambiance
+    }
+}
+'''
+
+device_custom_setting = {
+    'TV Room': {
+        'volume': 20
+    },
+}
+
 # fixed schedule, what time it starts and what track to use.
 schedule = {
     'morning': {
         'start': 7, # 7am
         'track': 'Birds',
-        'duration': 1 # 3 hours
+        'duration': 1 # 1 hours
     },
     'evening': {
         'start': 20, # 8pm

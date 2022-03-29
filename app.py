@@ -25,64 +25,72 @@ def get_track(device, track_type):
         return track[0]
 
 
+def check_blacklist(device):
+    device_name = device.player_name
+    if device_name in config.device_custom_setting:
+        if 'enabled' in config.device_custom_setting[device_name]:
+            if config.device_custom_setting[device_name]['enabled'] is False:
+                return True
+    return False
+
+
 def get_devices(start=True):
-    # create an empty list for devices to populate into
     devices = list(soco.discover())
+    coordinator = None
+    device_list = []
+    audio_data = config.audio_data
+
     if start:
-        coordinator = None
-        device_list = []
-        #### if you want to select or whitelist rooms ####
-        #temp_device = []
-        #count = 0
-        #for device in devices:
-        #    player_name = device.player_name
-        #    if player_name == 'Office':
-        #        temp_device.append(devices[count])
-        #    count += 1
-        #return temp_device
-        i = 0
-        # run twice to ensure all non-grouped devices are added.
-        while 2 > i:
-            for device in devices:
-                if device.is_coordinator:
-                    if device.get_current_transport_info()['current_transport_state'] != 'PLAYING':
-                        if coordinator != device:
-                            if not coordinator:
-                                coordinator = device
-                                device_list.append(device)
-                            else:
-                                device.join(coordinator)
-                                device_list.append(device)
-            i += 1
-    else: # get current renewed list because things can change
-        device_list = []
-        members = []
-        audio_data = config.audio_data
-        coordinator = None
-        i = 0
-        while 2 > i:
-            for device in devices:
-                track_info = device.get_current_track_info()
-                if track_info['artist'] == audio_data['artist'] and track_info['album'] == audio_data['album']:
+        for device in devices:
+            group_coordinator = device.group.coordinator
+            if group_coordinator.get_current_transport_info()['current_transport_state'] != 'PLAYING':
+                if not check_blacklist(device):
+                    if not coordinator:
+                        if device not in device_list:
+                            device.unjoin()
+                            device.set_relative_volume(-100)
+                            coordinator = device
+                            device_list.append(device)
+                    else:
+                        if device not in device_list:
+                            device.join(coordinator)
+                            device.set_relative_volume(-100)
+                            device_list.append(device)
+
+    # if the device isn't starting get a new list of all devices currently playing ambiance
+    else:
+        for device in devices:
+            track_info = device.get_current_track_info()
+            if track_info['artist'] == audio_data['artist'] and track_info['album'] == audio_data['album']:
+                group_coordinator = device.group.coordinator
+                if group_coordinator.get_current_transport_info()['current_transport_state'] == 'PLAYING':
                     coordinator = device
-                    device_list.append(device)
-                    members = list(device.group.members)
-                else:
-                    if members:
-                        if device in members:
-                            if device not in device_list:
-                                device_list.append(device)
-            i += 1
+                    break
+
+        if not coordinator:
+            return None, None
+
+        for member in coordinator.group.members:
+            if not check_blacklist(device):
+                if member not in device_list:
+                    device_list.append(member)
 
     return device_list, coordinator
 
+    
 
 def ajust_volume(on):
     devices, coordinator = get_devices(start=False)
+    if not devices:
+        return False
+
     if on is True:
-        volume = config.base_volume
         for device in devices:
-            device.set_relative_volume(-100)
+            volume = config.base_volume
+            device_name = device.player_name
+            if device_name in config.device_custom_setting:
+                if 'volume' in config.device_custom_setting[device_name]:
+                    volume = config.device_custom_setting[device_name]['volume']
             ramp_time = device.ramp_to_volume(volume, ramp_type='SLEEP_TIMER_RAMP_TYPE')
         return ramp_time
     elif on is False:
@@ -143,8 +151,6 @@ def generate_schedule():
         log('Adding event {} at {}:{}'.format('random', hour, minute))
 
         scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute)
-
-    #scheduler.print_jobs()
 
 
 def stop_ambiance():
@@ -211,12 +217,14 @@ def start_ambiance(track_type):
         log('Adding stop event at {}:{}'.format(stop_time[0], stop_time[1]))
         scheduler.add_job(stop_ambiance, 'cron', hour=stop_time[0], minute=stop_time[1])
 
-    # set volume
-    ajust_volume(True)
-
     # there should only be 1 track on the queue
     coordinator.play_from_queue(index=0)
     coordinator.seek(start_time)
+
+    # give time for all the speakers to be grouped and set
+    time.sleep(6)
+
+    ajust_volume(True)
 
 
 def log(message):
