@@ -4,6 +4,7 @@ This app schedules random daily ambiance events using sonos. Fixed schedules can
 # to do
  - device monitoring and grouping while track is playing
  - configuration error handling
+ - add simple web interface for stats and manual start
 
 # configuration
 Some configuration settings are set through enviromental variables.
