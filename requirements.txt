@@ -1,3 +1,5 @@
-soco
+libxml2
+libxslt
 apscheduler
 pyyaml
+soco
