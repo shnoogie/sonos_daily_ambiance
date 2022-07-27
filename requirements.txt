@@ -1,4 +1,3 @@
-libxml2
 libxslt
 apscheduler
 pyyaml
