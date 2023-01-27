@@ -10,7 +10,7 @@ else:
 if os.environ.get('APP_RUNONSTART') == "True":
     run_on_start = True
 else:
-    run_on_start = False
+    run_on_start = True
 
 # schedule to run after start
 if os.environ.get('APP_CONFIG'):
@@ -43,3 +43,8 @@ if 'schedule' in yaml_config:
     schedule = yaml_config['schedule']
 else:
     schedule = None
+
+if 'track weight' in yaml_config:
+    track_weight = yaml_config['track weight']
+else:
+    track_weight = None

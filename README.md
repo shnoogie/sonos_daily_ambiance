@@ -6,10 +6,7 @@ This app schedules random daily ambiance events using sonos. Fixed schedules can
  - configuration error handling
  - add simple web interface for stats and manual start
    - global stats such as currently playing track, current tracks in pool
-   - individual stats, such as last track played, number of times played
- - randomization weights
-   - Give a specific track weights to cause it to have a higher selection chance by assigning each track a value (default 1) which would determine the number of times it's in the randomization table
-
+ 
 # configuration
 Some configuration settings are set through environmental variables.
 
@@ -51,7 +48,11 @@ schedule: # Sets a custom schedule for static events
     start: 7
     track: Birds
 track blacklist: # Tracks to be ignored when a random event is started
-  -Night
+  - Night
+  - Thunderstorm
+track weight: # Number of times a track is added to the randomization table. Higher numbers mean higher chance of being selected. Default is 1.
+  Rain: 3
+  Birds: 6
 
 ```
 

@@ -1,6 +1,12 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
-import random, time, datetime, soco
+import os.path
+import random
+import time
+import datetime
+import soco
+import json
 import config
+
 
 def get_track(device, track_type):
     if track_type == 'random': 
@@ -13,12 +19,29 @@ def get_track(device, track_type):
         else:
             blacklist = []
 
+        if config.track_weight:
+            track_weight = config.track_weight
+        else:
+            track_weight = {}
+
         for track in tracks:
             if track.title not in blacklist:
                 track_list.append(track)
 
+        temp_track_list = []
+        for track in track_list:
+            if track.title in track_weight:
+                weight = track_weight[track.title]
+                count = 1
+                while count <= weight:
+                    count += 1
+                    temp_track_list.append(track)
+
+        track_list = track_list + temp_track_list
+
         # select random track
         random_track = random.choice(track_list)
+
         return random_track
     else:
         selection = config.schedule[track_type]['track']
@@ -250,6 +273,7 @@ def start_ambiance(track_type):
     # add stop event if the track is random
     if track_type == 'random':
         log('Adding stop event at {}:{}'.format(stop_time[0], stop_time[1]))
+        track_log(track.title)
         scheduler.add_job(stop_ambiance, 'cron', hour=stop_time[0], minute=stop_time[1])
 
     # there should only be 1 track on the queue
@@ -265,6 +289,36 @@ def log(message):
     print(message)
     with open('log.txt', 'a') as file:
         file.write(message+'\n')
+
+
+def track_log(track):
+    log_file = 'track_log.json'
+    current_time = datetime.datetime.today().strftime('%m/%d/%Y %H:%M')
+
+    if not os.path.exists(log_file):
+        with open(log_file, 'w') as file:
+            file.write('{}')
+
+    with open(log_file, 'r') as file:
+        json_data = json.loads(file.read())
+
+    with open(log_file, 'w') as file:
+        if track in json_data:
+            json_data.update({
+                track: {
+                    'count': json_data[track]['count']+1,
+                    'last_played': current_time
+                }
+            })
+        else:
+            json_data.update({
+                track: {
+                    'count': 1,
+                    'last_played': current_time
+                }
+            })
+
+        file.write(json.dumps(json_data, sort_keys=True, indent=4))
 
 
 if __name__ == '__main__':
