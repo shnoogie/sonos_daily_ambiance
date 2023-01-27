@@ -2,12 +2,16 @@
 This app schedules random daily ambiance events using sonos. Fixed schedules can also be created, wake up to bird songs. You can randomly determine how many events in a day and where the track starts to keep from being fatigued. You can easily add new tracks without the need to update config.
 
 # to do
- - device monitoring and grouping while track is playing
+ - device monitoring and grouping while track is playing **this may not be a good idea if you intentionally remove a device from a group
  - configuration error handling
  - add simple web interface for stats and manual start
+   - global stats such as currently playing track, current tracks in pool
+   - individual stats, such as last track played, number of times played
+ - randomization weights
+   - Give a specific track weights to cause it to have a higher selection chance by assigning each track a value (default 1) which would determine the number of times it's in the randomization table
 
 # configuration
-Some configuration settings are set through enviromental variables.
+Some configuration settings are set through environmental variables.
 
 - TZ - set the timezone using TZ database names seen here https://en.wikipedia.org/wiki/List_of_tz_database_time_zones. default: UTC
 - APP_RUNONSTART - runs an event when the app is started. default: False
