@@ -7,8 +7,11 @@ else:
     timezone = "UTC"
 
 # schedule to run after start
-if os.environ.get('APP_RUNONSTART') == "True":
-    run_on_start = True
+if os.path.exists('DEV'):
+    if os.environ.get('APP_RUNONSTART') == "True":
+        run_on_start = True
+    else:
+        run_on_start = False
 else:
     run_on_start = True
 
