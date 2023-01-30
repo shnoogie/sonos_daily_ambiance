@@ -8,12 +8,12 @@ else:
 
 # schedule to run after start
 if os.path.exists('DEV'):
+    run_on_start = True
+else:
     if os.environ.get('APP_RUNONSTART') == "True":
         run_on_start = True
     else:
         run_on_start = False
-else:
-    run_on_start = True
 
 # schedule to run after start
 if os.environ.get('APP_CONFIG'):
