@@ -7,6 +7,7 @@ else:
     timezone = "UTC"
 
 # schedule to run after start
+# Allow DEV
 if os.path.exists('DEV'):
     run_on_start = True
 else:
