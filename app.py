@@ -1,5 +1,6 @@
-from apscheduler.schedulers.blocking import BlockingScheduler
-import os.path
+from apscheduler.schedulers.background import BackgroundScheduler
+from multiprocessing import Process, Pipe
+import os
 import random
 import time
 import datetime
@@ -7,10 +8,12 @@ import soco
 import json
 import config
 
+CURRENT_SCHEDULE = ''
+
 
 def get_track(device, track_type):
     if track_type == 'random': 
-        # get all the tracks in the album
+        # get all the tracks on the album
         tracks = device.music_library.get_albums('albums', subcategories=[config.album])
         track_list = []
         
@@ -126,7 +129,7 @@ def get_devices(coordinator=None):
     return device_list, coordinator
 
 
-def ajust_volume(starting, coordinator=None):
+def adjust_volume(starting, coordinator=None):
     if coordinator:
         devices, coordinator = get_devices(coordinator)
     else:
@@ -157,7 +160,8 @@ def ajust_volume(starting, coordinator=None):
 
 
 def generate_schedule():
-    end_date = '{} 20:00:00'.format(datetime.date.today())
+    global CURRENT_SCHEDULE
+    CURRENT_SCHEDULE = []
 
     # remove jobs and start again
     for job in scheduler.get_jobs():
@@ -186,30 +190,36 @@ def generate_schedule():
         minute = int(event[1])
         # add some entropy, humans crave that
         if minute < 30:
-            minute = minute + random.randint(1,29)
+            minute = minute + random.randint(1, 29)
         elif minute == 30:
-            minute = minute + random.randint(1,20)
+            minute = minute + random.randint(1, 20)
 
         log('Adding event {} at {}:{}'.format('random', hour, minute))
-
+        CURRENT_SCHEDULE.append('{} at {}:{}'.format('random', hour, minute))
         scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute)
 
     if config.schedule:
         for event in config.schedule:
             hour = config.schedule[event]['start']
             log('Adding event {} at {}:00'.format(event, hour))
+            CURRENT_SCHEDULE.append('{} at {}:00'.format(event, hour))
             scheduler.add_job(start_ambiance, 'cron', [event], hour=hour, minute=0)
             end_hour = hour + config.schedule[event]['duration']
             scheduler.add_job(stop_ambiance, 'cron', hour=end_hour, minute=0)
             event_count += 1
 
-    log('Generated schedule. Created {} events.'.format(event_count))
+    log('Generated schedule. Created {} events'.format(event_count))
 
 
 def stop_ambiance():
     log('Stopping')
+    for job in scheduler.get_jobs():
+        if 'stop_ambiance' in job.name:
+            scheduler.remove_job(job.id)
+            log('Stop Jobs Removed')
+
     devices, coordinator = get_devices()
-    ramp_time = ajust_volume(False)
+    ramp_time = adjust_volume(False)
     time.sleep(ramp_time + 5)
     if coordinator:
         coordinator.stop()
@@ -219,17 +229,19 @@ def generate_timestamps(track_duration):
     now = datetime.datetime.now().timestamp()
 
     play_duration = '00:{}:00'.format(random.randrange(config.duration_range[0], config.duration_range[1]))
-    play_duration = time.strptime(play_duration,'%H:%M:%S')
-    play_duration = datetime.timedelta(hours=play_duration.tm_hour,minutes=play_duration.tm_min,seconds=play_duration.tm_sec).total_seconds()
+    play_duration = time.strptime(play_duration, '%H:%M:%S')
+    play_duration = datetime.timedelta(hours=play_duration.tm_hour, minutes=play_duration.tm_min,
+                                       seconds=play_duration.tm_sec).total_seconds()
 
-    track_duration = time.strptime(track_duration,'%H:%M:%S')
-    track_duration = datetime.timedelta(hours=track_duration.tm_hour,minutes=track_duration.tm_min,seconds=track_duration.tm_sec).total_seconds()
+    track_duration = time.strptime(track_duration, '%H:%M:%S')
+    track_duration = datetime.timedelta(hours=track_duration.tm_hour, minutes=track_duration.tm_min,
+                                        seconds=track_duration.tm_sec).total_seconds()
 
     start_max = track_duration - play_duration
     start_time = 0
 
-    # if the track time is shorter then the max potental play time then start from 0
-    if track_duration > config.duration_range[1]*60: # convert to minutes
+    # if the track time is shorter than the max potential play time then start from 0
+    if track_duration > config.duration_range[1]*60:  # convert to minutes
         start_time = random.randrange(0, start_max)
     else:
         start_time = 0
@@ -246,11 +258,10 @@ def generate_timestamps(track_duration):
 
 
 def start_ambiance(track_type):
-    current_time = datetime.datetime.today().strftime('%H:%M')
-    log('Starting {}'.format(track_type, current_time))
+    log('Starting {}'.format(track_type))
 
     if track_type != 'random':
-        log('Stopping other events for manaully scheduled event')
+        log('Stopping other events for manually scheduled event')
         stop_ambiance()
 
     coordinator = create_group()
@@ -274,13 +285,41 @@ def start_ambiance(track_type):
     if track_type == 'random':
         log('Adding stop event at {}:{}'.format(stop_time[0], stop_time[1]))
         track_log(track.title)
+        log('Playing Track: {}'.format(track.title))
         scheduler.add_job(stop_ambiance, 'cron', hour=stop_time[0], minute=stop_time[1])
 
     # there should only be 1 track on the queue
     coordinator.play_from_queue(index=0)
     coordinator.seek(start_time)
 
-    ajust_volume(True, coordinator=coordinator)
+    adjust_volume(True, coordinator=coordinator)
+
+
+def change_track():
+    log('Changing track')
+
+    devices, coordinator = get_devices()
+
+    if coordinator is None:
+        log('No track currently playing.')
+        return None
+
+    ramp_time = adjust_volume(False)
+    time.sleep(ramp_time + 1)
+
+    # get the queue ready, select and add track
+    coordinator.clear_queue()
+    track = get_track(coordinator, 'random')
+    coordinator.add_to_queue(track)
+
+    track_info = coordinator.get_current_track_info()
+    start_time, stop_time = generate_timestamps(track_info['duration'])
+
+    # there should only be 1 track on the queue
+    coordinator.play_from_queue(index=0)
+    coordinator.seek(start_time)
+
+    adjust_volume(True, coordinator=coordinator)
 
 
 def log(message):
@@ -318,13 +357,60 @@ def track_log(track):
                 }
             })
 
-        file.write(json.dumps(json_data, sort_keys=True, indent=4))
+        file.write(json.dumps(json_data, sort_keys=True))
+
+
+def start_web(conn):
+    import cherrypy
+    import web_interface
+
+    conf = {
+        '/': {
+            'tools.staticdir.root': os.path.abspath(os.getcwd()+'/web')
+        },
+        '/style': {
+            'tools.staticdir.on': True,
+            'tools.staticdir.dir': 'style'
+        }
+    }
+
+    cherrypy.server.socket_host = '0.0.0.0'
+    cherrypy.server.socket_port = 8080
+    cherrypy.quickstart(web_interface.app(conn), '/', conf)
+
+
+def web_command(command):
+    if command == 'schedule':
+        parent_conn.send(CURRENT_SCHEDULE)
+
+    elif command == 'generate_schedule':
+        generate_schedule()
+        parent_conn.send(CURRENT_SCHEDULE)
+
+    elif command == 'start':
+        start_ambiance('random')
+
+    elif command == 'stop':
+        stop_ambiance()
+
+    elif command == 'change_track':
+        change_track()
+
+    elif command == 'index':
+        devices, coordinator = get_devices()
+        current_track = "None"
+        if coordinator:
+            current_track = str(coordinator.get_current_track_info()['title'])
+
+        parent_conn.send(current_track)
+    else:
+        print('Unknown Command')
 
 
 if __name__ == '__main__':
     log('App starting.\nEnvironment: timezone={}, run_on_start={}'.format(config.timezone, config.run_on_start))
     try:
-        scheduler = BlockingScheduler(timezone=config.timezone)
+        scheduler = BackgroundScheduler(timezone=config.timezone)
     except Exception as e:
         log(e)
         exit()
@@ -332,10 +418,19 @@ if __name__ == '__main__':
     # generate first set of random weather
     generate_schedule()
 
-    if config.run_on_start:
-        start_ambiance('random')
-
     try:
         scheduler.start()
+
+        # set up web thread and communications pipe
+        parent_conn, child_conn = Pipe()
+        web_service = Process(target=start_web, args=(child_conn,))
+        web_service.start()
+
+        if config.run_on_start:
+            start_ambiance('random')
+
+        while True:
+            web_command(parent_conn.recv())
+
     except (KeyboardInterrupt, SystemExit):
         stop_ambiance()

@@ -1,4 +1,5 @@
 ambiance settings:
+  port: 8080
   album: Home
   artist: Ambiance
   duration range:
@@ -7,11 +8,15 @@ ambiance settings:
   event range:
   - 8
   - 10
-  volume: 30
+  volume: 2
   operation time:
     start: 9
     end: 20
 device settings:
+  Bedroom:
+    enabled: False # Removes the device from the automation
+  Bathroom:
+    enabled: False # Removes the device from the automation
 schedule:
 track blacklist:
 track weight:

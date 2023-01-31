@@ -1,5 +1,11 @@
 import os, yaml
 
+# check for dev
+if os.path.exists('DEV'):
+    DEV = True
+else:
+    DEV = False
+
 # default timezone
 if os.environ.get('TZ'):
     timezone = os.environ.get('TZ')
@@ -7,14 +13,13 @@ else:
     timezone = "UTC"
 
 # schedule to run after start
-# Allow DEV
-if os.path.exists('DEV'):
+if os.environ.get('APP_RUNONSTART') == "True":
     run_on_start = True
 else:
-    if os.environ.get('APP_RUNONSTART') == "True":
-        run_on_start = True
-    else:
-        run_on_start = False
+    run_on_start = False
+
+if DEV:
+    run_on_start = True
 
 # schedule to run after start
 if os.environ.get('APP_CONFIG'):
@@ -31,6 +36,7 @@ duration_range = yaml_config['ambiance settings']['duration range']
 event_range = yaml_config['ambiance settings']['event range']
 base_volume = yaml_config['ambiance settings']['volume']
 operation_time = yaml_config['ambiance settings']['operation time']
+port = yaml_config['ambiance settings']['port']
 
 # Optionals
 if 'track blacklist' in yaml_config:
