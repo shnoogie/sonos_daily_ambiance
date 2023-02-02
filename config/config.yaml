@@ -18,5 +18,14 @@ device settings:
   Bathroom:
     enabled: False # Removes the device from the automation
 schedule:
+  evening:
+    duration: 1 # Required. Length of event in hours
+    start: 20 # Required. Time to start the event
+    track: Night # Required. Track name to be used by event
+    volume: 15 # WORK IN PROGRESS. Sets max volume of manual event
+  morning:
+    duration: 1
+    start: 7
+    track: Birds
 track blacklist:
 track weight:

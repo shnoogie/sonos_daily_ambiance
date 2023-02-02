@@ -8,8 +8,6 @@ import soco
 import json
 import config
 
-CURRENT_SCHEDULE = ''
-
 
 def get_track(device, track_type):
     if track_type == 'random': 
@@ -160,8 +158,6 @@ def adjust_volume(starting, coordinator=None):
 
 
 def generate_schedule():
-    global CURRENT_SCHEDULE
-    CURRENT_SCHEDULE = []
 
     # remove jobs and start again
     for job in scheduler.get_jobs():
@@ -195,17 +191,13 @@ def generate_schedule():
             minute = minute + random.randint(1, 20)
 
         log('Adding event {} at {}:{}'.format('random', hour, minute))
-        CURRENT_SCHEDULE.append('{} at {}:{}'.format('random', hour, minute))
         scheduler.add_job(start_ambiance, 'cron', ['random'], hour=hour, minute=minute)
 
     if config.schedule:
         for event in config.schedule:
             hour = config.schedule[event]['start']
             log('Adding event {} at {}:00'.format(event, hour))
-            CURRENT_SCHEDULE.append('{} at {}:00'.format(event, hour))
             scheduler.add_job(start_ambiance, 'cron', [event], hour=hour, minute=0)
-            end_hour = hour + config.schedule[event]['duration']
-            scheduler.add_job(stop_ambiance, 'cron', hour=end_hour, minute=0)
             event_count += 1
 
     log('Generated schedule. Created {} events'.format(event_count))
@@ -238,7 +230,6 @@ def generate_timestamps(track_duration):
                                         seconds=track_duration.tm_sec).total_seconds()
 
     start_max = track_duration - play_duration
-    start_time = 0
 
     # if the track time is shorter than the max potential play time then start from 0
     if track_duration > config.duration_range[1]*60:  # convert to minutes
@@ -252,7 +243,6 @@ def generate_timestamps(track_duration):
     stop_time = [stop_time.hour, stop_time.minute]
 
     start_time = str(datetime.timedelta(seconds=start_time))
-    play_duration = str(datetime.timedelta(seconds=play_duration))
     
     return start_time, stop_time
 
@@ -281,12 +271,18 @@ def start_ambiance(track_type):
     track_info = coordinator.get_current_track_info()
     start_time, stop_time = generate_timestamps(track_info['duration'])
 
-    # add stop event if the track is random
+    # add stop events
     if track_type == 'random':
         log('Adding stop event at {}:{}'.format(stop_time[0], stop_time[1]))
         track_log(track.title)
-        log('Playing Track: {}'.format(track.title))
         scheduler.add_job(stop_ambiance, 'cron', hour=stop_time[0], minute=stop_time[1])
+    else:
+        log('Adding stop event at {}:{}'.format(stop_time[0], stop_time[1]))
+        hour = config.schedule[track_type]['start']
+        end_hour = hour + config.schedule[track_type]['duration']
+        scheduler.add_job(stop_ambiance, 'cron', hour=end_hour, minute=0)
+
+    log('Starting Track: {}'.format(track.title))
 
     # there should only be 1 track on the queue
     coordinator.play_from_queue(index=0)
@@ -360,6 +356,20 @@ def track_log(track):
         file.write(json.dumps(json_data, sort_keys=True))
 
 
+def list_jobs():
+    jobs = []
+    for job in scheduler.get_jobs():
+        job_type = job.name
+        if len(job.args) < 1:
+            track_type = ''
+        else:
+            track_type = job.args[0]
+        job_time = str(job.next_run_time).split(" ")[1].split(":")[0:2]
+        job_time = '{}:{}'.format(job_time[0], job_time[1])
+        jobs.append("{} {} at {}".format(job_type, track_type, job_time))
+    return jobs
+
+
 def start_web(conn):
     import cherrypy
     import web_interface
@@ -381,11 +391,11 @@ def start_web(conn):
 
 def web_command(command):
     if command == 'schedule':
-        parent_conn.send(CURRENT_SCHEDULE)
+        parent_conn.send(list_jobs())
 
     elif command == 'generate_schedule':
         generate_schedule()
-        parent_conn.send(CURRENT_SCHEDULE)
+        parent_conn.send(list_jobs())
 
     elif command == 'start':
         start_ambiance('random')
