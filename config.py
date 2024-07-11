@@ -58,3 +58,8 @@ if 'track weight' in yaml_config:
     track_weight = yaml_config['track weight']
 else:
     track_weight = None
+
+if 'record player' in yaml_config:
+    record_player_conf = yaml_config['record player']
+else:
+    record_player_conf = None

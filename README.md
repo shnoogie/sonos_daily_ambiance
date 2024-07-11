@@ -47,6 +47,9 @@ track blacklist: # Tracks to be ignored when a random event is started
 track weight: # Number of times a track is added to the randomization table. Higher numbers mean higher chance of being selected. Default is 1.
   Rain: 3
   Birds: 6
+record player: # A web app feature to quickly switch a room to a record player device
+  device: Office
+  device_channel: RF
 
 ```
 

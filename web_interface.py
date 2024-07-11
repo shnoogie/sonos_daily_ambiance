@@ -17,11 +17,12 @@ class app(object):
     @cherrypy.expose
     def index(self):
         self.conn.send('index')
-        current_track = self.conn.recv()
+        record_player = self.conn.recv()
         data = "<p class=\"title\"> home </p>"
         data = data + "<a href=\"/start\">start</a> | <a href=\"/stop\">stop</a> | \
             <a href=\"/change_track\">change track</a>"
-        data = data + "<p style=\"font-size:18px\"><br> Current Playing Track: " + current_track + "</p>"
+        if record_player is True:
+            data = data + "<p style=\"font-size:24px\"><br><a href=\"/record_player\">Start Record Player</a> </p>"
         html = self.generate_page(data)
         return html
 
@@ -33,6 +34,11 @@ class app(object):
     @cherrypy.expose
     def start(self):
         self.conn.send('start')
+        raise cherrypy.HTTPRedirect("/")
+
+    @cherrypy.expose
+    def record_player(self):
+        self.conn.send('record_player')
         raise cherrypy.HTTPRedirect("/")
 
     @cherrypy.expose

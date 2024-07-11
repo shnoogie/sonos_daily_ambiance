@@ -68,8 +68,12 @@ def create_group():
     device_list = []
 
     for device in devices:
+        state = None
         group_coordinator = device.group.coordinator
-        if group_coordinator.get_current_transport_info()['current_transport_state'] != 'PLAYING':
+        while state is None:
+            state = group_coordinator.get_current_transport_info()['current_transport_state']
+
+        if state != 'PLAYING':
             if not check_blacklist(device):
                 if not coordinator:
                     device.unjoin()
@@ -229,7 +233,7 @@ def generate_timestamps(track_duration):
     track_duration = datetime.timedelta(hours=track_duration.tm_hour, minutes=track_duration.tm_min,
                                         seconds=track_duration.tm_sec).total_seconds()
 
-    start_max = track_duration - play_duration
+    start_max = int(track_duration - play_duration)
 
     # if the track time is shorter than the max potential play time then start from 0
     if track_duration > config.duration_range[1]*60:  # convert to minutes
@@ -369,6 +373,36 @@ def list_jobs():
         jobs.append("{} {} at {}".format(job_type, track_type, job_time))
     return jobs
 
+def switch_to_record():
+    devices = list(soco.discover(include_invisible=True))
+
+    record_device_name = config.record_player_conf['device']
+    record_device_channel = config.record_player_conf['device_channel']
+
+    record_device = None
+    line_in_device = None
+
+
+    for device in devices:
+        player_name = device.player_name
+        is_visible = device.is_visible
+
+        if player_name == record_device_name and device.is_visible:
+            record_device = device
+
+        if record_device_channel == device.channel:
+            line_in_device = device
+
+        if line_in_device and record_device:
+            record_device.unjoin()
+            time.sleep(2)
+            record_device.switch_to_line_in(line_in_device)
+            adjust_volume(True, coordinator=record_device)
+            record_device.play()
+            break
+
+    return True
+
 
 def start_web(conn):
     import cherrypy
@@ -406,13 +440,15 @@ def web_command(command):
     elif command == 'change_track':
         change_track()
 
-    elif command == 'index':
-        devices, coordinator = get_devices()
-        current_track = "None"
-        if coordinator:
-            current_track = str(coordinator.get_current_track_info()['title'])
+    elif command == 'record_player':
+        switch_to_record()
 
-        parent_conn.send(current_track)
+    elif command == 'index':
+        if config.record_player_conf:
+            parent_conn.send(True)
+        else:
+            parent_conn.send(False)
+
     else:
         print('Unknown Command')
 
